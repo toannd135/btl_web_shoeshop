@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  shoeshop-mysql:
+    image: ${DOCKER_HUB_USERNAME}/${DOCKER_DB_CONTAINER_NAME}:${DOCKER_DB_CONTAINER_TAG}
+    container_name: ${DOCKER_DB_CONTAINER_NAME}
+    pull_policy: if_not_present
+    restart: always
+    ports:
+      - "${DOCKER_DB_HOST_PORT}:${DOCKER_DB_CONTAINER_PORT}"
+    env_file:
+      - ./.env
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - shoeshop-network
+
+  shoeshop-redis:
+    image: ${DOCKER_HUB_USERNAME}/${DOCKER_REDIS_CONTAINER_NAME}:${DOCKER_REDIS_CONTAINER_TAG}
+    container_name: ${DOCKER_REDIS_CONTAINER_NAME}
+    pull_policy: if_not_present
+    restart: always
+    ports:
+      - "${DOCKER_REDIS_HOST_PORT}:${DOCKER_REDIS_CONTAINER_PORT}"
+    env_file:
+      - ./.env
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - shoeshop-network
+
+  shoeshop-backend:
+    image: ${DOCKER_HUB_USERNAME}/${DOCKER_BACKEND_CONTAINER_NAME}:${DOCKER_BACKEND_CONTAINER_TAG}
+    container_name: ${DOCKER_BACKEND_CONTAINER_NAME}
+    pull_policy: if_not_present
+    restart: always
+    ports: 
+      - "${DOCKER_BACKEND_HOST_PORT}:${DOCKER_BACKEND_CONTAINER_PORT}"
+    env_file:
+      - ./.env
+    networks:
+      - shoeshop-network
+    depends_on:
+      shoeshop-mysql:
+        condition: service_healthy
+      shoeshop-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  shoeshop-frontend:
+    image: ${DOCKER_HUB_USERNAME}/${DOCKER_FRONTEND_CONTAINER_NAME}:${DOCKER_FRONTEND_CONTAINER_TAG}
+    container_name: ${DOCKER_FRONTEND_CONTAINER_NAME}
+    pull_policy: if_not_present
+    restart: always
+    ports:
+      - "${DOCKER_FRONTEND_HOST_PORT}:${DOCKER_FRONTEND_CONTAINER_PORT}"
+    networks:
+      - shoeshop-network
+    depends_on:
+      shoeshop-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+volumes:
+  dbmysql:
+
+networks:
+  shoeshop-network:
+    driver: bridge
